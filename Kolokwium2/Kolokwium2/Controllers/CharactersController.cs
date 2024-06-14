@@ -7,10 +7,10 @@ namespace Kolokwium.Controllers;
 [Route("api/[controller]")]
 public class CharactersController : ControllerBase
 {
-    public ICharacterService _CharacterService;
+    public ICharacterService _characterService;
     public CharactersController(ICharacterService characterService)
     {
-        _CharacterService = characterService;
+        _characterService = characterService;
     }
 
     [HttpGet("{characterId}")]
@@ -18,12 +18,16 @@ public class CharactersController : ControllerBase
     {
         try
         {
-            var character = await _CharacterService.GetCharactersInfo(characterId);
+            var character = await _characterService.GetCharactersInfo(characterId);
             return Ok(character);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(500, new { message = "An error occurred while retrieving the character information." });
         }
     }
 
@@ -32,12 +36,20 @@ public class CharactersController : ControllerBase
     {
         try
         {
-            var items = await _CharacterService.AddItemsToBackpack(characterId,itemsId);
+            var items = await _characterService.AddItemsToBackpack(characterId, itemsId);
             return Ok(items);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
         catch (Exception ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return StatusCode(500, new { message = "An error occurred while adding items to the backpack." });
         }
     }
 }

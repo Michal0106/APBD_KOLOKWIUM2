@@ -23,7 +23,7 @@ public class CharacterService : ICharacterService
             .FirstOrDefaultAsync(c => c.Id == id);
         if (character is null)
         {
-            throw new Exception($"Character with given id = {id} has not been found");
+            throw new KeyNotFoundException($"Character with given id = {id} has not been found");
         }
 
         var charactersInfo = new GetCharacterDTO()
@@ -63,13 +63,14 @@ public class CharacterService : ICharacterService
             .Include(ch => ch.Backpacks)
             .FirstOrDefaultAsync(ch => ch.Id == characterId);
         
-        var newItemsWeight = await _dataBaseContext.Items
+        var itemsToAdd = await _dataBaseContext.Items
             .Where(i => itemsId.Contains(i.Id))
-            .SumAsync(i => i.Weight);
+            .ToListAsync();
+
+        var newItemsWeight = itemsToAdd.Sum(i => i.Weight * itemsId.Count(id => id == i.Id));
         
         character.CurrentWeight += newItemsWeight;
 
-        var items = new List<ItemsInfoDTO>();
         foreach (var itemId in itemsId)
         {
             var existingBackpackItem = character.Backpacks.FirstOrDefault(bp => bp.ItemId == itemId);
@@ -87,17 +88,18 @@ public class CharacterService : ICharacterService
                     Amount = 1
                 });
             }
-            items.Add(new ItemsInfoDTO()
-            {
-                Amount = 1,
-                ItemId = itemId,
-                CharacterId = characterId
-            });
         }
 
         await _dataBaseContext.SaveChangesAsync();
 
-        return items;
+        return character.Backpacks
+            .Where(bp => bp.CharacterId == characterId)
+            .Select(bp => new ItemsInfoDTO()
+                {
+                    Amount = bp.Amount,
+                    ItemId = bp.ItemId,
+                    CharacterId = characterId
+                }).ToList();
     }
 
     public async Task<bool> DoItemsExist(ICollection<int> itemsId)
@@ -107,7 +109,7 @@ public class CharacterService : ICharacterService
             var item = await _dataBaseContext.Items.AnyAsync(i => i.Id == itemId);
             if (!item)
             {
-                throw new Exception($"Item for given id = {itemId} has been not found in Items repository");
+                throw new KeyNotFoundException($"Item with ID = {itemId} was not found in the Items repository.");
             }
         }
         return true;
@@ -119,16 +121,21 @@ public class CharacterService : ICharacterService
 
         if (character is null)
         {
-            throw new Exception($"Character for given id = {characterId} does not exist");
+            throw new KeyNotFoundException($"Character for given id = {characterId} does not exist");
         }
         
         var currentWeight = character.CurrentWeight;
-        var newItemsWeight = await _dataBaseContext.Items.Where(i => itemsId.Contains(i.Id)).SumAsync(i => i.Weight);
+        
+        var itemsToAdd = await _dataBaseContext.Items
+            .Where(i => itemsId.Contains(i.Id))
+            .ToListAsync();
 
+        var newItemsWeight = itemsToAdd.Sum(i => i.Weight * itemsId.Count(id => id == i.Id));
+        
         var totalWeight = currentWeight + newItemsWeight;
         if (totalWeight > character.MaxWeight)
         {
-            throw new Exception("Max weight exceeded");
+            throw new InvalidOperationException("Max weight exceeded");
         }
 
         return false;
